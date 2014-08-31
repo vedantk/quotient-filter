@@ -191,10 +191,10 @@ static void qf_test(struct quotient_filter *qf)
   uint64_t size = qf->qf_max_size;
   for (idx = 0; idx < size; ++idx) {
     assert(get_elem(qf, idx) == 0);
-    set_elem(qf, idx, idx);
+    set_elem(qf, idx, idx & qf->qf_elem_mask);
   }
   for (idx = 0; idx < size; ++idx) {
-    assert(get_elem(qf, idx) == idx);
+    assert(get_elem(qf, idx) == (idx & qf->qf_elem_mask));
   }
   qf_clear(qf);
 
@@ -203,7 +203,7 @@ static void qf_test(struct quotient_filter *qf)
   for (idx = 0; idx < size; ++idx) {
     uint64_t slot = rand64() % size;
     uint64_t hash = rand64();
-    set_elem(qf, slot, hash);
+    set_elem(qf, slot, hash & qf->qf_elem_mask);
     elements[slot] = hash & qf->qf_elem_mask;
   }
   for (idx = 0; idx < elements.size(); ++idx) {
@@ -226,7 +226,7 @@ static void qf_test(struct quotient_filter *qf)
   keys.clear();
   qf_clear(qf);
 
-  // Enable once qf_remove() has been implemented.
+  // XXX: Enable once qf_remove() has been implemented.
 #if 0
   /* Check that the QF works like a hash set when all keys are p-bit values. */
   for (idx = 0; idx < 1000000; ++idx) {
@@ -275,6 +275,8 @@ int main()
 {
   srand(0);
   for (uint32_t q = 1; q < 24; ++q) {
+    printf("Starting rounds for q=%lu\n", q);
+
     for (uint32_t r = 1; r < 32; ++r) {
       struct quotient_filter qf;
       if (!qf_init(&qf, q, r)) {
