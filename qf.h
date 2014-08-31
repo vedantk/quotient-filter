@@ -38,6 +38,7 @@ bool qf_init(struct quotient_filter *qf, uint32_t q, uint32_t r);
 
 /*
  * Inserts a hash into the QF.
+ * Only the lowest q+r bits are actually inserted into the QF table.
  *
  * Returns false if the QF is full.
  */
@@ -45,6 +46,7 @@ bool qf_insert(struct quotient_filter *qf, uint64_t hash);
 
 /*
  * Returns true if the QF may contain the hash.
+ *
  * Returns false otherwise.
  */
 bool qf_may_contain(struct quotient_filter *qf, uint64_t hash);
@@ -52,8 +54,15 @@ bool qf_may_contain(struct quotient_filter *qf, uint64_t hash);
 /*
  * Removes the hash from the QF.
  *
- * Caution: If your hash function emits more than q+r bits, some queries may
- * report false negatives.
+ * Caution: If you plan on using this function, make sure that your hash
+ * function emits no more than q+r bits. Consider the following scenario;
+ *
+ *	insert(qf, A:X)   # X takes up the lowest q+r bits.
+ *	insert(qf, B:X)   # This is a no-op, since X is already in the table.
+ *	remove(qf, A:X)   # X is removed from the table.
+
+ * Now, may-contain(qf, B:X) == false, which is a disastrous false negative.
+ * To avoid this problem, define hash'(V) = hash(V) & ((1ULL << (q+r)) - 1).
  */
 void qf_remove(struct quotient_filter *qf, uint64_t hash);
 
@@ -81,7 +90,7 @@ void qf_clear(struct quotient_filter *qf);
 size_t qf_table_size(uint32_t q, uint32_t r);
 
 /*
- * Finds the expected false positive rate for the QF.
+ * Finds the expected false positive rate of the QF.
  *
  * The rate is in the interval [0, 1). See qf_init for ways to lower it.
  */
@@ -105,6 +114,6 @@ bool qfi_done(struct quotient_filter *qf, struct qf_iterator *i);
 /*
  * Returns the next (q+r)-bit fingerprint in the QF.
  *
- * Caution: Do not call this routine is qfi_done() == true.
+ * Caution: Do not call this routine if qfi_done() == true.
  */
 uint64_t qfi_next(struct quotient_filter *qf, struct qf_iterator *i);
