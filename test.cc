@@ -26,6 +26,34 @@ static uint64_t rand64()
   return (((uint64_t) rand()) << 32) | ((uint64_t) rand());
 }
 
+static void qf_print(struct quotient_filter *qf)
+{
+  char buf[32];
+  uint32_t pad = qf->qf_qbits + 2;
+
+  for (uint32_t i = 0; i < pad; ++i) {
+    printf(i == qf->qf_qbits ? "|" : " ");
+  }
+  puts("is_shifted | is_continuation | is_occupied | remainder");
+
+  for (uint64_t idx = 0; idx < qf->qf_max_size; ++idx) {
+    snprintf(buf, sizeof(buf), "%llu", idx);
+    printf("%s", buf);
+
+    int fillspace = qf->qf_qbits - strlen(buf);
+    for (int i = 0; i < fillspace; ++i) {
+      printf(" ");
+    }
+    printf("| ");
+
+    uint64_t elt = get_elem(qf, idx);
+    printf("%d          | ", !!is_shifted(elt));
+    printf("%d               | ", !!is_continuation(elt));
+    printf("%d           | ", !!is_occupied(elt));
+    printf("%llu\n", get_remainder(elt));
+  }
+}
+
 /* Check QF structural invariants. */
 static void qf_consistent(struct quotient_filter *qf)
 {
@@ -35,11 +63,19 @@ static void qf_consistent(struct quotient_filter *qf)
   assert(qf->qf_elem_bits == (qf->qf_rbits + 3));
 
   uint64_t idx;
+  uint64_t start;
   uint64_t size = qf->qf_max_size;
   assert(qf->qf_entries <= size);
   uint64_t last_run_elt;
 
-  for (idx = 0; idx < size; ++idx) {
+  for (start = 0; start < size; ++start) {
+    if (is_cluster_start(get_elem(qf, start))) {
+      break;
+    }
+  }
+
+  idx = start;
+  do {
     uint64_t elt = get_elem(qf, idx);
 
     /* Check for invalid metadata bits. */
@@ -59,7 +95,9 @@ static void qf_consistent(struct quotient_filter *qf)
       }
       last_run_elt = rem;
     }
-  }
+
+    idx = incr(qf, idx);
+  } while (idx != start);
 }
 
 /* Generate a random 64-bit hash. If @clrhigh, clear the high (64-p) bits. */
@@ -178,6 +216,10 @@ static void qf_test(struct quotient_filter *qf)
   for (idx = 0; idx < size; ++idx) {
     uint64_t elt = genhash(qf, false, keys);
     assert(qf_insert(qf, elt));
+
+    // XXX
+    qf_print(qf);
+
     keys.insert(elt);
   }
   ht_check(qf, keys);
