@@ -10,7 +10,7 @@
 
 #include "qf.h"
 
-#define LOW_MASK(n) ((1 << (n)) - 1)
+#define LOW_MASK(n) ((1ULL << (n)) - 1ULL)
 
 bool qf_init(struct quotient_filter *qf, uint32_t q, uint32_t r)
 {
@@ -32,7 +32,7 @@ bool qf_init(struct quotient_filter *qf, uint32_t q, uint32_t r)
 }
 
 /* Return QF[idx] in the lower bits. */
-static inline uint64_t get_elem(struct quotient_filter *qf, uint64_t idx)
+static uint64_t get_elem(struct quotient_filter *qf, uint64_t idx)
 {
 	uint64_t elt = 0;
 	size_t bitpos = qf->qf_elem_bits * idx;
@@ -49,8 +49,7 @@ static inline uint64_t get_elem(struct quotient_filter *qf, uint64_t idx)
 }
 
 /* Store the lower bits of elt into QF[idx]. */
-static inline void set_elem(struct quotient_filter *qf, uint64_t idx,
-		uint64_t elt)
+static void set_elem(struct quotient_filter *qf, uint64_t idx, uint64_t elt)
 {
 	size_t bitpos = qf->qf_elem_bits * idx;
 	size_t tabpos = bitpos / 64;
@@ -172,25 +171,26 @@ static inline uint64_t find_run_index(struct quotient_filter *qf, uint64_t fq)
 }
 
 /* Insert elt into QF[s], shifting over elements as necessary. */
-static inline void insert_into(struct quotient_filter *qf, uint64_t s,
-		uint64_t elt)
+static void insert_into(struct quotient_filter *qf, uint64_t s, uint64_t elt)
 {
 	uint64_t prev;
 	uint64_t curr = elt;
 	bool empty;
+
 	do {
 		prev = get_elem(qf, s);
 
-		/* Preserve the is_occupied bit. */
-		if (is_occupied(prev)) {
-			curr = set_occupied(curr);
-			prev = clr_occupied(prev);
-		}
-
 		/* Set is_shifted on all elements we shift. */
 		empty = is_empty(prev);
+
 		if (!empty) {
 			prev = set_shifted(prev);
+
+			/* Preserve the is_occupied bit. */
+			if (is_occupied(prev)) {
+				curr = set_occupied(curr);
+				prev = clr_occupied(prev);
+			}
 		}
 
 		/* Set the element and walk down the table. */
@@ -210,23 +210,26 @@ bool qf_insert(struct quotient_filter *qf, uint64_t hash)
 	uint64_t fq = hash_to_quotient(qf, hash);
 	uint64_t fr = hash_to_remainder(qf, hash);
 	uint64_t T_fq = get_elem(qf, fq);
-	uint64_t start = find_run_index(qf, fq);
 
 	/* Create space for the metadata bits. */
 	uint64_t entry = (fr << 3) & ~7;
 
+	/* Special-case filling canonical slots to simplify insert_into(). */
+	if (is_empty(T_fq)) {
+		set_elem(qf, fq, set_occupied(entry));
+		++qf->qf_entries;
+		return true;
+	}
+
 	if (!is_occupied(T_fq)) {
-		/* Create a new bucket for this quotient. */
-		if (start == fq) {
-			entry = set_occupied(entry);
-		} else {
-			entry = set_shifted(entry);
-			set_elem(qf, fq, set_occupied(T_fq));
-		}
-		insert_into(qf, start, entry);
-	} else {
+		set_elem(qf, fq, set_occupied(T_fq));
+	}
+
+	uint64_t start = find_run_index(qf, fq);
+	uint64_t s = start;
+
+	if (is_occupied(T_fq)) {
 		/* Move the cursor to the insert position in the fq bucket. */
-		uint64_t s = start;
 		do {
 			uint64_t rem = get_remainder(get_elem(qf, s));
 			if (rem == fr) {
@@ -237,17 +240,22 @@ bool qf_insert(struct quotient_filter *qf, uint64_t hash)
 			s = incr(qf, s);
 		} while (is_continuation(get_elem(qf, s)));
 
-		if (s != start) {
-			/* The new element is a continuation. */
-			entry = set_continuation(set_shifted(entry));
+		if (s == start) {
+			/* The old start-of-run will become a continuation. */
+			uint64_t old_head = get_elem(qf, start);
+			set_elem(qf, start, set_continuation(old_head));
 		} else {
-			/* The old start-of-run is now a continuation. */
-			uint64_t old_head = get_elem(qf, s);
-			old_head = set_continuation(set_shifted(old_head));
-			set_elem(qf, s, old_head); 
+			/* The new element will become a continuation. */
+			entry = set_continuation(entry);
 		}
-		insert_into(qf, s, fr);
 	}
+
+	/* Set the shifted bit if we can't use the canonical slot. */
+	if (s != fq) {
+		entry = set_shifted(entry);
+	}
+
+	insert_into(qf, s, entry);
 	++qf->qf_entries;
 	return true;
 }

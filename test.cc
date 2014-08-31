@@ -216,10 +216,6 @@ static void qf_test(struct quotient_filter *qf)
   for (idx = 0; idx < size; ++idx) {
     uint64_t elt = genhash(qf, false, keys);
     assert(qf_insert(qf, elt));
-
-    // XXX
-    qf_print(qf);
-
     keys.insert(elt);
   }
   ht_check(qf, keys);
