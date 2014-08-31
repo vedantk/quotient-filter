@@ -9,15 +9,21 @@ extern "C" {
 }
 
 #include <set>
+#include <vector>
 #include <cassert>
 #include <cstdio>
 
-using std::set;
+using namespace std;
 
 static void fail(struct quotient_filter *qf, const char *s)
 {
   fprintf(stderr, "qf(q=%u, r=%u): %s\n", qf->qf_qbits, qf->qf_rbits, s);
   abort();
+}
+
+static uint64_t rand64()
+{
+  return (((uint64_t) rand()) << 32) | ((uint64_t) rand());
 }
 
 /* Check QF structural invariants. */
@@ -67,9 +73,9 @@ static uint64_t genhash(struct quotient_filter *qf, bool clrhigh,
   /* If the QF is overloaded, use a linear scan to find an unused hash. */
   if (keys.size() > (3 * (size / 4))) {
     uint64_t probe;
-    uint64_t start = ((uint64_t) rand()) & qf->qf_index_mask;
+    uint64_t start = rand64() & qf->qf_index_mask;
     for (probe = incr(qf, start); probe != start; probe = incr(qf, probe)) {
-      uint64_t hi = clrhigh ? 0 : (((uint64_t) rand() << 32) & mask);
+      uint64_t hi = clrhigh ? 0 : (rand64() & mask);
       hash = hi | probe;
       if (!keys.count(hash)) {
         return hash;
@@ -79,9 +85,7 @@ static uint64_t genhash(struct quotient_filter *qf, bool clrhigh,
 
   /* Find a random unused hash. */
   do {
-    uint64_t hi = (uint64_t) rand();
-    uint64_t lo = (uint64_t) rand();
-    hash = ((hi << 32) | lo) & mask;
+    hash = rand64() & mask;
   } while (keys.count(hash));
   return hash;
 }
@@ -156,6 +160,19 @@ static void qf_test(struct quotient_filter *qf)
   }
   qf_clear(qf);
 
+  /* Random get/set tests. */
+  vector<uint64_t> elements(size, 0);
+  for (idx = 0; idx < size; ++idx) {
+    uint64_t slot = rand64() % size;
+    uint64_t hash = rand64();
+    set_elem(qf, slot, hash);
+    elements[slot] = hash & qf->qf_elem_mask;
+  }
+  for (idx = 0; idx < elements.size(); ++idx) {
+    assert(get_elem(qf, idx) == elements[idx]);
+  }
+  qf_clear(qf);
+
   /* Check: forall x, insert(x) => may-contain(x). */
   set<uint64_t> keys;
   for (idx = 0; idx < size; ++idx) {
@@ -167,6 +184,8 @@ static void qf_test(struct quotient_filter *qf)
   keys.clear();
   qf_clear(qf);
 
+  // Enable once qf_remove() has been implemented.
+#if 0
   /* Check that the QF works like a hash set when all keys are p-bit values. */
   for (idx = 0; idx < 1000000; ++idx) {
     while (qf->qf_entries < size) {
@@ -184,6 +203,7 @@ static void qf_test(struct quotient_filter *qf)
       assert(keys.count(hash));
     }
   }
+#endif
 }
 
 /* Fill up the QF (at least partially). */
