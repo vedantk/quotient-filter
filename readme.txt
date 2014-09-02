@@ -5,7 +5,7 @@ This is a working in-memory quotient filter written in C.
 
 qf.c: Implementation
 qf.h: API and documentation
-test.c: Comprehensive randomized tester
+test.cc: Comprehensive randomized tester
 
 What are quotient filters?
 ==========================
