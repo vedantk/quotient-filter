@@ -1,3 +1,12 @@
+What is this?
+=============
+
+This is a working in-memory quotient filter written in C.
+
+qf.c: Implementation
+qf.h: API and documentation
+test.c: Comprehensive randomized tester
+
 What are quotient filters?
 ==========================
 
@@ -6,19 +15,21 @@ following operations [1]:
 
 - Insert(qf, key)
 - May-Contain(qf, key)
-- Remove(qf, key)
+- Remove(qf, key) (with a caveat, see the documentation in qf.h)
 - Merge(qf1, qf2) -> qfout
+- Iterate(qf)
 
 Like Bloom filters, quotient filters support approximate membership tests with
 no false negatives. Advantages of quotient filters over Bloom filters include:
 
-- Superior data locality
+- Improved locality of accesses
 - Lessened reliance on hash functions
-- Deterministic key removal
+- Deterministic (or `correct') key removal
 - The ability to merge filters without rehashing data
+- The ability to iterate through hashes in the filter (modulo 2^(q+r))
 
-These properties make quotient filters useful as on-disk data structures. See
-[2] for a specific example with the log-structured merge tree.
+These properties make quotient filters useful on-disk data structures. See [2]
+for a specific example involving the log-structured merge tree.
 
 Advantages of Bloom filters over quotient filters include:
 
@@ -27,6 +38,8 @@ Advantages of Bloom filters over quotient filters include:
 
 Semantics of the QF metadata bits
 =================================
+
+This is a point of confusion which [3] attempts to clarify. To summarize:
 
 - is_occupied
 
@@ -44,7 +57,7 @@ Semantics of the QF metadata bits
 
   Set to true when a fingerprint is not in its canonical slot (i.e when
   Fq != x, where x is the slot index). Set to false otherwise. Note that this
-  metadata bit is affixed to the fingerprint, and not to a particular slot.
+  metadata bit is attached to the fingerprint, and not to a particular slot.
 
 References
 ==========
@@ -52,3 +65,5 @@ References
 [1] Don’t Thrash: How to Cache Your Hash on Flash (Bender et. al.)
 
 [2] Building Workload-Independent Storage with VT-Trees (Shetty et. al.)
+
+[3] Wikipedia, https://en.wikipedia.org/wiki/Quotient_filter
