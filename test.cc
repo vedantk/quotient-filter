@@ -18,7 +18,8 @@ using namespace std;
 
 /* I need a more powerful machine to increase these parameters... */
 const uint32_t Q_MAX = 12;
-const uint32_t R_MAX = 4;
+const uint32_t R_MAX = 6;
+const uint32_t ROUNDS_MAX = 1000;
 
 static void fail(struct quotient_filter *qf, const char *s)
 {
@@ -222,7 +223,7 @@ static void qf_test(struct quotient_filter *qf)
   qf_clear(qf);
 
   /* Check that the QF works like a hash set when all keys are p-bit values. */
-  for (idx = 0; idx < 100; ++idx) {
+  for (idx = 0; idx < ROUNDS_MAX; ++idx) {
     while (qf->qf_entries < size) {
       ht_put(qf, keys);
     }
