@@ -25,8 +25,7 @@ bool qf_init(struct quotient_filter *qf, uint32_t q, uint32_t r)
 	qf->qf_elem_mask = LOW_MASK(qf->qf_elem_bits);
 	qf->qf_entries = 0; 
 	qf->qf_max_size = 1 << q;
-	size_t bytes = qf_table_size(q, r);
-	qf->qf_table = (uint64_t *) calloc(bytes, 1);
+	qf->qf_table = (uint64_t *) calloc(qf_table_size(q, r), 1);
 	return qf->qf_table != NULL;
 }
 
@@ -165,7 +164,7 @@ static inline uint64_t find_run_index(struct quotient_filter *qf, uint64_t fq)
 		b = decr(qf, b);
 	}
 
-	/* Find the start of the bucket for fq. */
+	/* Find the start of the run for fq. */
 	uint64_t s = b;
 	while (b != fq) {
 		do {
@@ -188,21 +187,15 @@ static void insert_into(struct quotient_filter *qf, uint64_t s, uint64_t elt)
 
 	do {
 		prev = get_elem(qf, s);
-
-		/* Set is_shifted on all elements we shift. */
 		empty = is_empty(prev);
-
 		if (!empty) {
+			/* Fix up `is_shifted' and `is_occupied'. */
 			prev = set_shifted(prev);
-
-			/* Preserve the is_occupied bit. */
 			if (is_occupied(prev)) {
 				curr = set_occupied(curr);
 				prev = clr_occupied(prev);
 			}
 		}
-
-		/* Set the element and walk down the table. */
 		set_elem(qf, s, curr);
 		curr = prev;
 		s = incr(qf, s);
@@ -211,7 +204,6 @@ static void insert_into(struct quotient_filter *qf, uint64_t s, uint64_t elt)
 
 bool qf_insert(struct quotient_filter *qf, uint64_t hash)
 {
-	/* If we're over capacity, give up. */
 	if (qf->qf_entries >= qf->qf_max_size) {
 		return false;
 	}
@@ -219,8 +211,6 @@ bool qf_insert(struct quotient_filter *qf, uint64_t hash)
 	uint64_t fq = hash_to_quotient(qf, hash);
 	uint64_t fr = hash_to_remainder(qf, hash);
 	uint64_t T_fq = get_elem(qf, fq);
-
-	/* Create space for the metadata bits. */
 	uint64_t entry = (fr << 3) & ~7;
 
 	/* Special-case filling canonical slots to simplify insert_into(). */
@@ -238,7 +228,7 @@ bool qf_insert(struct quotient_filter *qf, uint64_t hash)
 	uint64_t s = start;
 
 	if (is_occupied(T_fq)) {
-		/* Move the cursor to the insert position in the fq bucket. */
+		/* Move the cursor to the insert position in the fq run. */
 		do {
 			uint64_t rem = get_remainder(get_elem(qf, s));
 			if (rem == fr) {
@@ -250,11 +240,11 @@ bool qf_insert(struct quotient_filter *qf, uint64_t hash)
 		} while (is_continuation(get_elem(qf, s)));
 
 		if (s == start) {
-			/* The old start-of-run will become a continuation. */
+			/* The old start-of-run becomes a continuation. */
 			uint64_t old_head = get_elem(qf, start);
 			set_elem(qf, start, set_continuation(old_head));
 		} else {
-			/* The new element will become a continuation. */
+			/* The new element becomes a continuation. */
 			entry = set_continuation(entry);
 		}
 	}
@@ -275,12 +265,12 @@ bool qf_may_contain(struct quotient_filter *qf, uint64_t hash)
 	uint64_t fr = hash_to_remainder(qf, hash);
 	uint64_t T_fq = get_elem(qf, fq);
 
-	/* If this quotient has no bucket, give up. */
+	/* If this quotient has no run, give up. */
 	if (!is_occupied(T_fq)) {
 		return false;
 	}
 
-	/* Scan the sorted bucket for the desired remainder. */
+	/* Scan the sorted run for the target remainder. */
 	uint64_t s = find_run_index(qf, fq);
 	do {
 		uint64_t rem = get_remainder(get_elem(qf, s));
@@ -303,7 +293,7 @@ static void delete_entry(struct quotient_filter *qf, uint64_t s, uint64_t quot)
 	uint64_t orig = s;
 
 	/*
-	 * FIXME(vsk): This loop looks ugly. `sp == orig' is evil. Rewrite.
+	 * FIXME(vsk): This loop looks ugly. Rewrite.
 	 */
 	while (true) {
 		next = get_elem(qf, sp);
@@ -346,7 +336,6 @@ bool qf_remove(struct quotient_filter *qf, uint64_t hash)
 	uint64_t fr = hash_to_remainder(qf, hash);
 	uint64_t T_fq = get_elem(qf, fq);
 
-	/* The hash isn't in the filter. */
 	if (!is_occupied(T_fq) || !qf->qf_entries) {
 		return true;
 	}
@@ -355,19 +344,16 @@ bool qf_remove(struct quotient_filter *qf, uint64_t hash)
 	uint64_t s = start;
 	uint64_t rem;
 
-	/* Find the offending table index. */
+	/* Find the offending table index (or give up). */
 	do {
 		rem = get_remainder(get_elem(qf, s));
 		if (rem == fr) {
 			break;
 		} else if (rem > fr) {
-			/* We would have seen the hash by now if it existed. */
 			return true;
 		}
 		s = incr(qf, s);
 	} while (is_continuation(get_elem(qf, s)));
-
-	/* Give up if we couldn't find a matching remainder. */
 	if (rem != fr) {
 		return true;
 	}
@@ -410,6 +396,10 @@ bool qf_remove(struct quotient_filter *qf, uint64_t hash)
 bool qf_merge(struct quotient_filter *qf1, struct quotient_filter *qf2,
 		struct quotient_filter *qfout)
 {
+	/*
+	 * FIXME(vsk): We need a smarter API to properly control q and r.
+	 */
+
 	uint32_t q;
 	uint32_t r;
 	if (qf1->qf_qbits > qf2->qf_qbits) {
@@ -488,7 +478,7 @@ uint64_t qfi_next(struct quotient_filter *qf, struct qf_iterator *i)
 	while (!qfi_done(qf, i)) {
 		uint64_t elt = get_elem(qf, i->qfi_index);
 
-		/* Keep track of the current bucket. */
+		/* Keep track of the current run. */
 		if (is_cluster_start(elt)) {
 			i->qfi_quotient = i->qfi_index;
 		} else {
