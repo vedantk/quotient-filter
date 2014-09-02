@@ -12,6 +12,7 @@ extern "C" {
 #include <vector>
 #include <cassert>
 #include <cstdio>
+#include <cmath>
 
 using namespace std;
 
@@ -29,18 +30,19 @@ static uint64_t rand64()
 static void qf_print(struct quotient_filter *qf)
 {
   char buf[32];
-  uint32_t pad = qf->qf_qbits + 2;
+  uint32_t pad = uint32_t(ceil(float(qf->qf_qbits) / logf(10.f))) + 1;
 
   for (uint32_t i = 0; i < pad; ++i) {
-    printf(i == qf->qf_qbits ? "|" : " ");
+    printf(" ");
   }
-  puts("is_shifted | is_continuation | is_occupied | remainder");
+  printf("| is_shifted | is_continuation | is_occupied | remainder"
+      " nel=%lu\n", qf->qf_entries);
 
   for (uint64_t idx = 0; idx < qf->qf_max_size; ++idx) {
     snprintf(buf, sizeof(buf), "%llu", idx);
     printf("%s", buf);
 
-    int fillspace = qf->qf_qbits - strlen(buf);
+    int fillspace = pad - strlen(buf);
     for (int i = 0; i < fillspace; ++i) {
       printf(" ");
     }
@@ -67,6 +69,14 @@ static void qf_consistent(struct quotient_filter *qf)
   uint64_t size = qf->qf_max_size;
   assert(qf->qf_entries <= size);
   uint64_t last_run_elt;
+  uint64_t visited = 0;
+
+  if (qf->qf_entries == 0) {
+    for (start = 0; start < size; ++start) {
+      assert(get_elem(qf, start) == 0);
+    }
+    return;
+  }
 
   for (start = 0; start < size; ++start) {
     if (is_cluster_start(get_elem(qf, start))) {
@@ -74,9 +84,16 @@ static void qf_consistent(struct quotient_filter *qf)
     }
   }
 
+  assert(start < size);
+
   idx = start;
   do {
     uint64_t elt = get_elem(qf, idx);
+
+    /* Make sure there are no dirty entries. */
+    if (is_empty(elt)) {
+      assert(get_remainder(elt) == 0);
+    }
 
     /* Check for invalid metadata bits. */
     if (is_continuation(elt)) {
@@ -94,10 +111,13 @@ static void qf_consistent(struct quotient_filter *qf)
         assert(rem > last_run_elt);
       }
       last_run_elt = rem;
+      ++visited;
     }
 
     idx = incr(qf, idx);
   } while (idx != start);
+
+  assert(qf->qf_entries == visited);
 }
 
 /* Generate a random 64-bit hash. If @clrhigh, clear the high (64-p) bits. */
@@ -136,41 +156,16 @@ static void ht_put(struct quotient_filter *qf, set<uint64_t> &keys)
   keys.insert(hash);
 }
 
-/* Decode the p-bit hash at QF[idx] and remove it from the table. */
-static uint64_t ht_erase(struct quotient_filter *qf, uint64_t idx)
-{
-  uint64_t c;
-  uint64_t run_delta = 0;
-  uint64_t elt = get_elem(qf, idx);
-  for (c = idx; !is_cluster_start(get_elem(qf, c)); c = decr(qf, c)) {
-    if (is_run_start(get_elem(qf, c))) {
-      ++run_delta;
-    }
-  }
-
-  uint64_t hi = c + run_delta;
-  uint64_t lo = get_remainder(elt);
-  uint64_t hash = (hi << qf->qf_rbits) | lo;
-  qf_remove(qf, hash);
-  assert(!qf_may_contain(qf, hash));
-  return hash;
-}
-
 /* Remove a hash from the filter. */
 static void ht_del(struct quotient_filter *qf, set<uint64_t> &keys)
 {
-  uint64_t idx;
-  uint64_t start = ((uint64_t) rand()) & qf->qf_index_mask;
-  for (idx = incr(qf, start); idx != start; idx = incr(qf, idx)) {
-    uint64_t elt = get_elem(qf, idx);
-    if (!elt) {
-      continue;
-    }
-
-    uint64_t hash = ht_erase(qf, idx);
-    keys.erase(hash);
-    return;
-  }
+  set<uint64_t>::iterator it;
+  uint64_t idx = rand64() % keys.size();
+  for (it = keys.begin(); it != keys.end() && idx; ++it, --idx);
+  uint64_t hash = *it;
+  assert(qf_remove(qf, hash));
+  assert(!qf_may_contain(qf, hash));
+  keys.erase(hash);
 }
 
 /* Check that a set of keys are in the QF. */
@@ -222,13 +217,12 @@ static void qf_test(struct quotient_filter *qf)
   keys.clear();
   qf_clear(qf);
 
-  // XXX: Enable once qf_remove() has been implemented.
-#if 0
   /* Check that the QF works like a hash set when all keys are p-bit values. */
-  for (idx = 0; idx < 1000000; ++idx) {
+  for (idx = 0; idx < 1000; ++idx) {
     while (qf->qf_entries < size) {
       ht_put(qf, keys);
     }
+
     while (qf->qf_entries > (size / 2)) {
       ht_del(qf, keys);
     }
@@ -241,7 +235,6 @@ static void qf_test(struct quotient_filter *qf)
       assert(keys.count(hash));
     }
   }
-#endif
 }
 
 /* Fill up the QF (at least partially). */
@@ -271,7 +264,7 @@ int main()
 {
   srand(0);
   for (uint32_t q = 1; q < 24; ++q) {
-    printf("Starting rounds for q=%lu\n", q);
+    printf("Starting rounds for qf_test::q=%lu\n", q);
 
     for (uint32_t r = 1; r < 32; ++r) {
       struct quotient_filter qf;
@@ -286,11 +279,9 @@ int main()
   for (uint32_t q1 = 1; q1 < 24; ++q1) {
     for (uint32_t r1 = 1; r1 < 32; ++r1) {
       for (uint32_t q2 = 1; q2 < 24; ++q2) {
-        for (uint32_t r2 = 1; r2 < 32; ++r2) {
-          if ((q1 + r1) != (q2 + r2)) {
-            continue;
-          }
+        printf("Starting rounds for qf_merge::q1=%lu,q2=%lu\n", q1, q2);
 
+        for (uint32_t r2 = 1; r2 < 32; ++r2) {
           struct quotient_filter qf;
           struct quotient_filter qf1, qf2;
           if (!qf_init(&qf1, q1, r1) || !qf_init(&qf2, q2, r2)) {
@@ -311,6 +302,6 @@ int main()
     }
   }
 
-  puts("[PASSED] basic qf tests");
+  puts("[PASSED] qf tests");
   return 0;
 }

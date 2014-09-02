@@ -23,7 +23,6 @@ struct quotient_filter {
 
 struct qf_iterator {
 	uint64_t qfi_index;
-	uint64_t qfi_start_cluster;
 	uint64_t qfi_quotient;
 	uint64_t qfi_visited;
 };
@@ -52,25 +51,26 @@ bool qf_insert(struct quotient_filter *qf, uint64_t hash);
 bool qf_may_contain(struct quotient_filter *qf, uint64_t hash);
 
 /*
- * Removes the hash from the QF.
+ * Removes a hash from the QF.
  *
  * Caution: If you plan on using this function, make sure that your hash
  * function emits no more than q+r bits. Consider the following scenario;
  *
- *	insert(qf, A:X)   # X takes up the lowest q+r bits.
+ *	insert(qf, A:X)   # X is in the lowest q+r bits.
  *	insert(qf, B:X)   # This is a no-op, since X is already in the table.
  *	remove(qf, A:X)   # X is removed from the table.
-
- * Now, may-contain(qf, B:X) == false, which is a disastrous false negative.
- * To avoid this problem, define hash'(V) = hash(V) & ((1ULL << (q+r)) - 1).
+ *
+ * Now, may-contain(qf, B:X) == false, which is a ruinous false negative.
+ *
+ * Returns false if the hash uses more than q+r bits.
  */
-void qf_remove(struct quotient_filter *qf, uint64_t hash);
+bool qf_remove(struct quotient_filter *qf, uint64_t hash);
 
 /*
  * Initializes qfout and copies over all elements from qf1 and qf2.
- * Caution: qfout is allocated twice as much space as either qf1 or qf2.
+ * Caution: qfout holds twice as many entries as either qf1 or qf2.
  *
- * Returns false if q1+r1 != q2+r2, or on ENOMEM.
+ * Returns false on ENOMEM.
  */
 bool qf_merge(struct quotient_filter *qf1, struct quotient_filter *qf2,
 	struct quotient_filter *qfout);
@@ -88,13 +88,6 @@ void qf_clear(struct quotient_filter *qf);
  * Caution: sizeof(struct quotient_filter) is not included.
  */
 size_t qf_table_size(uint32_t q, uint32_t r);
-
-/*
- * Finds the expected false positive rate of the QF.
- *
- * The rate is in the interval [0, 1). See qf_init for ways to lower it.
- */
-float qf_false_positive_rate(struct quotient_filter *qf);
 
 /*
  * Deallocates the QF table.
