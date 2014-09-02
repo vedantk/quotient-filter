@@ -16,6 +16,10 @@ extern "C" {
 
 using namespace std;
 
+/* I need a more powerful machine to increase these parameters... */
+const uint32_t Q_MAX = 12;
+const uint32_t R_MAX = 4;
+
 static void fail(struct quotient_filter *qf, const char *s)
 {
   fprintf(stderr, "qf(q=%u, r=%u): %s\n", qf->qf_qbits, qf->qf_rbits, s);
@@ -218,7 +222,7 @@ static void qf_test(struct quotient_filter *qf)
   qf_clear(qf);
 
   /* Check that the QF works like a hash set when all keys are p-bit values. */
-  for (idx = 0; idx < 1000; ++idx) {
+  for (idx = 0; idx < 100; ++idx) {
     while (qf->qf_entries < size) {
       ht_put(qf, keys);
     }
@@ -260,13 +264,28 @@ static void subsetof(struct quotient_filter *lhs, struct quotient_filter *rhs)
   }
 }
 
+/* Check if @qf contains both @qf1 and @qf2. */
+static void supersetof(struct quotient_filter *qf, struct quotient_filter *qf1,
+    struct quotient_filter *qf2)
+{
+  struct qf_iterator qfi;
+  qfi_start(qf, &qfi);
+  while (!qfi_done(qf, &qfi)) {
+    uint64_t hash = qfi_next(qf, &qfi);
+    bool in1 = qf_may_contain(qf1, hash & LOW_MASK(qf1->qf_qbits + qf1->qf_rbits));
+    bool in2 = qf_may_contain(qf2, hash & LOW_MASK(qf2->qf_qbits + qf2->qf_rbits));
+    assert(in1 || in2);
+  }
+}
+
 int main()
 {
   srand(0);
-  for (uint32_t q = 1; q < 24; ++q) {
+
+  for (uint32_t q = 1; q <= Q_MAX; ++q) {
     printf("Starting rounds for qf_test::q=%lu\n", q);
 
-    for (uint32_t r = 1; r < 32; ++r) {
+    for (uint32_t r = 1; r <= R_MAX; ++r) {
       struct quotient_filter qf;
       if (!qf_init(&qf, q, r)) {
         fail(&qf, "init-1");
@@ -276,12 +295,11 @@ int main()
     }
   }
 
-  for (uint32_t q1 = 1; q1 < 24; ++q1) {
-    for (uint32_t r1 = 1; r1 < 32; ++r1) {
-      for (uint32_t q2 = 1; q2 < 24; ++q2) {
+  for (uint32_t q1 = 1; q1 <= Q_MAX; ++q1) {
+    for (uint32_t r1 = 1; r1 <= R_MAX; ++r1) {
+      for (uint32_t q2 = 1; q2 <= Q_MAX; ++q2) {
         printf("Starting rounds for qf_merge::q1=%lu,q2=%lu\n", q1, q2);
-
-        for (uint32_t r2 = 1; r2 < 32; ++r2) {
+        for (uint32_t r2 = 1; r2 <= R_MAX; ++r2) {
           struct quotient_filter qf;
           struct quotient_filter qf1, qf2;
           if (!qf_init(&qf1, q1, r1) || !qf_init(&qf2, q2, r2)) {
@@ -294,6 +312,7 @@ int main()
           qf_consistent(&qf);
           subsetof(&qf1, &qf);
           subsetof(&qf2, &qf);
+          supersetof(&qf, &qf1, &qf2);
           qf_destroy(&qf1);
           qf_destroy(&qf2);
           qf_destroy(&qf);

@@ -407,7 +407,7 @@ bool qf_merge(struct quotient_filter *qf1, struct quotient_filter *qf2,
 	} else {
 		q = qf2->qf_qbits + 1;
 	}
-	if (qf1->qf_rbits < qf2->qf_rbits) {
+	if (qf1->qf_rbits > qf2->qf_rbits) {
 		r = qf1->qf_rbits;
 	} else {
 		r = qf2->qf_rbits;
