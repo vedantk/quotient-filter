@@ -123,11 +123,6 @@ static inline uint64_t get_remainder(uint64_t elt)
 	return elt >> 3;
 }
 
-static inline uint64_t set_remainder(uint64_t elt, uint64_t rem)
-{
-	return (rem << 3) | (elt & 7);
-}
-
 static inline bool is_empty(uint64_t elt)
 {
 	return (elt & 7) == 0;
@@ -156,7 +151,7 @@ static inline uint64_t hash_to_remainder(struct quotient_filter *qf,
 }
 
 /* Find the start index of the run for fq (given that the run exists). */
-static inline uint64_t find_run_index(struct quotient_filter *qf, uint64_t fq)
+static uint64_t find_run_index(struct quotient_filter *qf, uint64_t fq)
 {
 	/* Find the start of the cluster. */
 	uint64_t b = fq;
