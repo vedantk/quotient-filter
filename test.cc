@@ -130,7 +130,7 @@ static uint64_t genhash(struct quotient_filter *qf, bool clrhigh,
     set<uint64_t> &keys)
 {
   uint64_t hash;
-  uint64_t mask = clrhigh ? LOW_MASK(qf->qf_qbits + qf->qf_rbits) : ~0UL;
+  uint64_t mask = clrhigh ? LOW_MASK(qf->qf_qbits + qf->qf_rbits) : ~0ULL;
   uint64_t size = qf->qf_max_size;
 
   /* If the QF is overloaded, use a linear scan to find an unused hash. */
@@ -288,6 +288,7 @@ int main()
   for (uint32_t q = 1; q <= Q_MAX; ++q) {
     printf("Starting rounds for qf_test::q=%lu\n", q);
 
+#pragma omp parallel for
     for (uint32_t r = 1; r <= R_MAX; ++r) {
       struct quotient_filter qf;
       if (!qf_init(&qf, q, r)) {
@@ -302,6 +303,8 @@ int main()
     for (uint32_t r1 = 1; r1 <= R_MAX; ++r1) {
       for (uint32_t q2 = 1; q2 <= Q_MAX; ++q2) {
         printf("Starting rounds for qf_merge::q1=%lu,q2=%lu\n", q1, q2);
+
+#pragma omp parallel for
         for (uint32_t r2 = 1; r2 <= R_MAX; ++r2) {
           struct quotient_filter qf;
           struct quotient_filter qf1, qf2;
