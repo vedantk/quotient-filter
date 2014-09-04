@@ -394,7 +394,6 @@ bool qf_merge(struct quotient_filter *qf1, struct quotient_filter *qf2,
 	/*
 	 * FIXME(vsk): We need a smarter API to properly control q and r.
 	 */
-
 	uint32_t q;
 	uint32_t r;
 	if (qf1->qf_qbits > qf2->qf_qbits) {
