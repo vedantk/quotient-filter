@@ -41,7 +41,7 @@ static void qf_print(struct quotient_filter *qf)
     printf(" ");
   }
   printf("| is_shifted | is_continuation | is_occupied | remainder"
-      " nel=%lu\n", qf->qf_entries);
+      " nel=%u\n", qf->qf_entries);
 
   for (uint64_t idx = 0; idx < qf->qf_max_size; ++idx) {
     snprintf(buf, sizeof(buf), "%llu", idx);
@@ -138,10 +138,12 @@ static uint64_t genhash(struct quotient_filter *qf, bool clrhigh,
     uint64_t probe;
     uint64_t start = rand64() & qf->qf_index_mask;
     for (probe = incr(qf, start); probe != start; probe = incr(qf, probe)) {
-      uint64_t hi = clrhigh ? 0 : (rand64() & mask);
-      hash = hi | probe;
-      if (!keys.count(hash)) {
-        return hash;
+      if (is_empty(get_elem(qf, probe))) {
+        uint64_t hi = clrhigh ? 0 : (rand64() & ~mask);
+        hash = hi | (probe << qf->qf_rbits) | (rand64() & qf->qf_rmask);
+        if (!keys.count(hash)) {
+          return hash;
+        }
       }
     }
   }
