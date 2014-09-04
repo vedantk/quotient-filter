@@ -275,9 +275,7 @@ static void supersetof(struct quotient_filter *qf, struct quotient_filter *qf1,
   qfi_start(qf, &qfi);
   while (!qfi_done(qf, &qfi)) {
     uint64_t hash = qfi_next(qf, &qfi);
-    bool in1 = qf_may_contain(qf1, hash & LOW_MASK(qf1->qf_qbits + qf1->qf_rbits));
-    bool in2 = qf_may_contain(qf2, hash & LOW_MASK(qf2->qf_qbits + qf2->qf_rbits));
-    assert(in1 || in2);
+    assert(qf_may_contain(qf1, hash) || qf_may_contain(qf2, hash));
   }
 }
 
