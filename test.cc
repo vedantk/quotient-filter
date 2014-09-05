@@ -68,6 +68,9 @@ static void qf_consistent(struct quotient_filter *qf)
   assert(qf->qf_rbits);
   assert(qf->qf_qbits + qf->qf_rbits <= 64);
   assert(qf->qf_elem_bits == (qf->qf_rbits + 3));
+  assert(qf->qf_nr_markers > 1);
+  assert(qf->qf_table);
+  assert(qf->qf_markers);
 
   uint64_t idx;
   uint64_t start;

@@ -26,7 +26,11 @@ bool qf_init(struct quotient_filter *qf, uint32_t q, uint32_t r)
 	qf->qf_entries = 0; 
 	qf->qf_max_size = 1 << q;
 	qf->qf_table = (uint64_t *) calloc(qf_table_size(q, r), 1);
-	return qf->qf_table != NULL;
+	if (qf->qf_table) {
+		qf->qf_nr_markers = 8;
+		qf->qf_markers = (uint64_t *) malloc(8 * qf->qf_nr_markers);
+	}
+	return qf->qf_table != NULL && qf->qf_markers != NULL;
 }
 
 /* Return QF[idx] in the lower bits. */
@@ -150,26 +154,75 @@ static inline uint64_t hash_to_remainder(struct quotient_filter *qf,
 	return hash & qf->qf_rmask;
 }
 
+/* Append a run quotient marker to the marker table. */
+static inline bool add_marker(struct quotient_filter *qf, uint64_t idx,
+		uint64_t elt)
+{
+	if (idx >= qf->qf_nr_markers) {
+		qf->qf_nr_markers = (qf->qf_nr_markers * 4) / 3;
+		void *table = realloc((void *) qf->qf_markers,
+				8 * qf->qf_nr_markers);
+		if (!table) {
+			return false;
+		}
+		qf->qf_markers = (uint64_t *) table;
+	}
+	qf->qf_markers[idx] = elt;
+	return true;
+}
+
 /* Find the start index of the run for fq (given that the run exists). */
-static uint64_t find_run_index(struct quotient_filter *qf, uint64_t fq)
+static uint64_t find_run_index(struct quotient_filter *qf, uint64_t fq,
+		bool *result)
 {
 	/* Find the start of the cluster. */
+	uint64_t s;
 	uint64_t b = fq;
-	while (is_shifted(get_elem(qf, b))) {
+
+	/* As we're backtracking, count how many runs we've skipped over. */
+	uint64_t elt;
+	uint64_t runs_skipped = 0;
+	uint64_t runs_encountered = 0;
+	uint64_t last_run_head;
+
+	while (is_shifted((elt = get_elem(qf, b)))) {
+		if (is_occupied(elt)) {
+			if (!add_marker(qf, runs_encountered++, b)) {
+				*result = false;
+				return 0;
+			}
+		}
+		if (!is_continuation(elt)) {
+			if (!runs_skipped) {
+				last_run_head = b;
+			}
+			++runs_skipped;
+		}
 		b = decr(qf, b);
 	}
 
+	if (runs_skipped) {
+		/* Find the run quotient of the last run we can skip over. */
+		s = fq;
+		b = qf->qf_markers[runs_encountered - runs_skipped];
+	} else {
+		s = b;
+	}
+
 	/* Find the start of the run for fq. */
-	uint64_t s = b;
 	while (b != fq) {
+		/* Advance s until the end of the current run. */
 		do {
 			s = incr(qf, s);
 		} while (is_continuation(get_elem(qf, s)));
 
+		/* Advance b until we encounter another run in the cluster. */
 		do {
 			b = incr(qf, b);
 		} while (!is_occupied(get_elem(qf, b)));
 	}
+
+	*result = true;
 	return s;
 }
 
@@ -219,9 +272,13 @@ bool qf_insert(struct quotient_filter *qf, uint64_t hash)
 		set_elem(qf, fq, set_occupied(T_fq));
 	}
 
-	uint64_t start = find_run_index(qf, fq);
-	uint64_t s = start;
+	bool result;
+	uint64_t start = find_run_index(qf, fq, &result);
+	if (!result) {
+		return false;
+	}
 
+	uint64_t s = start;
 	if (is_occupied(T_fq)) {
 		/* Move the cursor to the insert position in the fq run. */
 		do {
@@ -266,7 +323,12 @@ bool qf_may_contain(struct quotient_filter *qf, uint64_t hash)
 	}
 
 	/* Scan the sorted run for the target remainder. */
-	uint64_t s = find_run_index(qf, fq);
+	bool result;
+	uint64_t s = find_run_index(qf, fq, &result);
+	if (!result) {
+		return true;
+	}
+
 	do {
 		uint64_t rem = get_remainder(get_elem(qf, s));
 		if (rem == fr) {
@@ -335,7 +397,12 @@ bool qf_remove(struct quotient_filter *qf, uint64_t hash)
 		return true;
 	}
 
-	uint64_t start = find_run_index(qf, fq);
+	bool result;
+	uint64_t start = find_run_index(qf, fq, &result);
+	if (!result) {
+		return false;
+	}
+
 	uint64_t s = start;
 	uint64_t rem;
 
@@ -439,6 +506,7 @@ size_t qf_table_size(uint32_t q, uint32_t r)
 void qf_destroy(struct quotient_filter *qf)
 {
 	free(qf->qf_table);
+	free(qf->qf_markers);
 }
 
 void qfi_start(struct quotient_filter *qf, struct qf_iterator *i)
