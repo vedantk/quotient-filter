@@ -8,11 +8,14 @@ extern "C" {
   #include "qf.c"
 }
 
+#define QBENCH 1
+
 #include <set>
 #include <vector>
 #include <cassert>
 #include <cstdio>
 #include <cmath>
+#include <sys/time.h>
 
 using namespace std;
 
@@ -282,10 +285,73 @@ static void supersetof(struct quotient_filter *qf, struct quotient_filter *qf1,
   }
 }
 
+static void qf_bench()
+{
+  struct quotient_filter qf;
+  const uint32_t q_large = 28;
+  const uint32_t q_small = 16;
+  const uint32_t nlookups = 1000000;
+  struct timeval tv1, tv2;
+  uint64_t sec;
+
+  /* Test random inserts + lookups. */
+  uint32_t ninserts = (3 * (1 << q_large) / 4);
+  printf("Testing %u random inserts and %u lookups", ninserts, nlookups);
+  fflush(stdout);
+  qf_init(&qf, q_large, 1);
+  gettimeofday(&tv1, NULL);
+  while (qf.qf_entries < ninserts) {
+    assert(qf_insert(&qf, (uint64_t) rand()));
+    if (qf.qf_entries % 10000000 == 0) {
+      printf(".");
+      fflush(stdout);
+    }
+  }
+  for (uint32_t i = 0; i < nlookups; ++i) {
+    qf_may_contain(&qf, (uint64_t) rand());
+  }
+  gettimeofday(&tv2, NULL);
+  sec = tv2.tv_sec - tv1.tv_sec;
+  printf(" done (%llu seconds).\n", sec);
+  fflush(stdout);
+  qf_destroy(&qf);
+
+  /* Create a large cluster. Test random lookups. */
+  qf_init(&qf, q_small, 1);
+  printf("Testing %u contiguous inserts and %u lookups", 1 << q_small,
+      nlookups);
+  fflush(stdout);
+  gettimeofday(&tv1, NULL);
+  for (uint64_t quot = 0; quot < (1 << (q_small - 1)); ++quot) {
+    uint64_t hash = quot << 1;
+    assert(qf_insert(&qf, hash));
+    assert(qf_insert(&qf, hash | 1));
+    if (quot % 2000 == 0) {
+      printf(".");
+      fflush(stdout);
+    }
+  }
+  for (uint32_t i = 0; i < nlookups; ++i) {
+    qf_may_contain(&qf, (uint64_t) rand());
+    if (i % 50000 == 0) {
+      printf(".");
+      fflush(stdout);
+    }
+  }
+  gettimeofday(&tv2, NULL);
+  sec = tv2.tv_sec - tv1.tv_sec;
+  printf(" done (%llu seconds).\n", sec);
+  fflush(stdout);
+  qf_destroy(&qf);
+}
+
 int main()
 {
   srand(0);
 
+#if QBENCH
+  qf_bench();
+#else
   for (uint32_t q = 1; q <= Q_MAX; ++q) {
     printf("Starting rounds for qf_test::q=%lu\n", q);
 
@@ -327,6 +393,7 @@ int main()
       }
     }
   }
+#endif /* QBENCH */
 
   puts("[PASSED] qf tests");
   return 0;
