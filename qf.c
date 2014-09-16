@@ -9,6 +9,7 @@
 
 #include "qf.h"
 
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define LOW_MASK(n) ((1ULL << (n)) - 1ULL)
 
 bool qf_init(struct quotient_filter *qf, uint32_t q, uint32_t r)
@@ -391,22 +392,8 @@ bool qf_remove(struct quotient_filter *qf, uint64_t hash)
 bool qf_merge(struct quotient_filter *qf1, struct quotient_filter *qf2,
 		struct quotient_filter *qfout)
 {
-	/*
-	 * FIXME(vsk): We need a smarter API to properly control q and r.
-	 */
-	uint32_t q;
-	uint32_t r;
-	if (qf1->qf_qbits > qf2->qf_qbits) {
-		q = qf1->qf_qbits + 1;
-	} else {
-		q = qf2->qf_qbits + 1;
-	}
-	if (qf1->qf_rbits > qf2->qf_rbits) {
-		r = qf1->qf_rbits;
-	} else {
-		r = qf2->qf_rbits;
-	}
-
+	uint32_t q = 1 + MAX(qf1->qf_qbits, qf2->qf_qbits);
+	uint32_t r = MAX(qf1->qf_rbits, qf2->qf_rbits);
 	if (!qf_init(qfout, q, r)) {
 		return false;
 	}
