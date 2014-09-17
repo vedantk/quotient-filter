@@ -19,8 +19,6 @@ struct quotient_filter {
 	uint64_t qf_elem_mask;
 	uint64_t qf_max_size;
 	uint64_t *qf_table;
-	uint64_t qf_nr_markers;
-	uint64_t *qf_markers;
 };
 
 struct qf_iterator {
