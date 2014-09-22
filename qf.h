@@ -10,9 +10,9 @@
 #include <stdbool.h>
 
 struct quotient_filter {
-	uint32_t qf_qbits;
-	uint32_t qf_rbits;
-	uint32_t qf_elem_bits;
+	uint8_t qf_qbits;
+	uint8_t qf_rbits;
+	uint8_t qf_elem_bits;
 	uint32_t qf_entries;
 	uint64_t qf_index_mask;
 	uint64_t qf_rmask;
