@@ -363,7 +363,6 @@ bool qf_remove(struct quotient_filter *qf, uint64_t hash)
 		if (!is_continuation(next)) {
 			T_fq = clr_occupied(T_fq);
 			set_elem(qf, fq, T_fq);
-			kill = (s == fq) ? T_fq : kill;
 		}
 	}
 
