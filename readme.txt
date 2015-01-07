@@ -36,6 +36,19 @@ Advantages of Bloom filters over quotient filters include:
 - Significantly lower implementation complexity
 - Constant query cost w.r.t the load factor of the filter
 
+Example usage
+=============
+
+  struct quotient_filter qf;
+  qf_init(&qf, 16, 8); // 2^16 slots, 8-bit remainders, ~0.7 MB.
+
+  uint64_t hash = hash24();
+  if (qf_insert(&qf, hash)) { // Fails only if the QF is already full.
+    assert(qf_may_contain(&qf, hash));
+  }
+
+  qf_remove(&qf, hash);
+
 Semantics of the QF metadata bits
 =================================
 
