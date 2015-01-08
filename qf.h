@@ -44,9 +44,7 @@ bool qf_init(struct quotient_filter *qf, uint32_t q, uint32_t r);
 bool qf_insert(struct quotient_filter *qf, uint64_t hash);
 
 /*
- * Returns true if the QF may contain the hash.
- *
- * Returns false otherwise.
+ * Returns true if the QF may contain the hash. Returns false otherwise.
  */
 bool qf_may_contain(struct quotient_filter *qf, uint64_t hash);
 
@@ -76,9 +74,7 @@ bool qf_merge(struct quotient_filter *qf1, struct quotient_filter *qf2,
 	struct quotient_filter *qfout);
 
 /*
- * Resets the QF table.
- *
- * This function does not deallocate any memory.
+ * Resets the QF table. This function does not deallocate any memory.
  */
 void qf_clear(struct quotient_filter *qf);
 
