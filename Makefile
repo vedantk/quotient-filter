@@ -1,1 +1,1 @@
-test: test.cc qf.c
+test: test.cc

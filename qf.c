@@ -124,7 +124,7 @@ static inline uint64_t get_remainder(uint64_t elt)
 	return elt >> 3;
 }
 
-static inline bool is_empty(uint64_t elt)
+static inline bool is_empty_element(uint64_t elt)
 {
 	return (elt & 7) == 0;
 }
@@ -183,7 +183,7 @@ static void insert_into(struct quotient_filter *qf, uint64_t s, uint64_t elt)
 
 	do {
 		prev = get_elem(qf, s);
-		empty = is_empty(prev);
+		empty = is_empty_element(prev);
 		if (!empty) {
 			/* Fix up `is_shifted' and `is_occupied'. */
 			prev = set_shifted(prev);
@@ -210,7 +210,7 @@ bool qf_insert(struct quotient_filter *qf, uint64_t hash)
 	uint64_t entry = (fr << 3) & ~7;
 
 	/* Special-case filling canonical slots to simplify insert_into(). */
-	if (is_empty(T_fq)) {
+	if (is_empty_element(T_fq)) {
 		set_elem(qf, fq, set_occupied(entry));
 		++qf->qf_entries;
 		return true;
@@ -295,7 +295,7 @@ static void delete_entry(struct quotient_filter *qf, uint64_t s, uint64_t quot)
 		next = get_elem(qf, sp);
 		bool curr_occupied = is_occupied(curr);
 
-		if (is_empty(next) || is_cluster_start(next) || sp == orig) {
+		if (is_empty_element(next) || is_cluster_start(next) || sp == orig) {
 			set_elem(qf, s, 0);
 			return;
 		} else {
@@ -473,7 +473,7 @@ uint64_t qfi_next(struct quotient_filter *qf, struct qf_iterator *i)
 
 		i->qfi_index = incr(qf, i->qfi_index);
 
-		if (!is_empty(elt)) {
+		if (!is_empty_element(elt)) {
 			uint64_t quot = i->qfi_quotient;
 			uint64_t rem = get_remainder(elt);
 			uint64_t hash = (quot << qf->qf_rbits) | rem;

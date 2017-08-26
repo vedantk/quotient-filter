@@ -100,7 +100,7 @@ static void qf_consistent(struct quotient_filter *qf)
     uint64_t elt = get_elem(qf, idx);
 
     /* Make sure there are no dirty entries. */
-    if (is_empty(elt)) {
+    if (is_empty_element(elt)) {
       assert(get_remainder(elt) == 0);
     }
 
@@ -110,11 +110,11 @@ static void qf_consistent(struct quotient_filter *qf)
 
       /* Check that this is actually a continuation. */
       uint64_t prev = get_elem(qf, decr(qf, idx));
-      assert(!is_empty(prev));
+      assert(!is_empty_element(prev));
     }
 
     /* Check that remainders within runs are sorted. */
-    if (!is_empty(elt)) {
+    if (!is_empty_element(elt)) {
       uint64_t rem = get_remainder(elt);
       if (is_continuation(elt)) {
         assert(rem > last_run_elt);
@@ -142,7 +142,7 @@ static uint64_t genhash(struct quotient_filter *qf, bool clrhigh,
     uint64_t probe;
     uint64_t start = rand64() & qf->qf_index_mask;
     for (probe = incr(qf, start); probe != start; probe = incr(qf, probe)) {
-      if (is_empty(get_elem(qf, probe))) {
+      if (is_empty_element(get_elem(qf, probe))) {
         uint64_t hi = clrhigh ? 0 : (rand64() & ~mask);
         hash = hi | (probe << qf->qf_rbits) | (rand64() & qf->qf_rmask);
         if (!keys.count(hash)) {
@@ -351,7 +351,7 @@ int main()
   qf_bench();
 #else
   for (uint32_t q = 1; q <= Q_MAX; ++q) {
-    printf("Starting rounds for qf_test::q=%lu\n", q);
+    printf("Starting rounds for qf_test::q=%u\n", q);
 
 #pragma omp parallel for
     for (uint32_t r = 1; r <= R_MAX; ++r) {
@@ -367,7 +367,7 @@ int main()
   for (uint32_t q1 = 1; q1 <= Q_MAX; ++q1) {
     for (uint32_t r1 = 1; r1 <= R_MAX; ++r1) {
       for (uint32_t q2 = 1; q2 <= Q_MAX; ++q2) {
-        printf("Starting rounds for qf_merge::q1=%lu,q2=%lu\n", q1, q2);
+        printf("Starting rounds for qf_merge::q1=%u,q2=%u\n", q1, q2);
 
 #pragma omp parallel for
         for (uint32_t r2 = 1; r2 <= R_MAX; ++r2) {
